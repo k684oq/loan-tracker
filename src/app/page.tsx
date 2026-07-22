@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-
+export const dynamic = 'force-dynamic'
 type LoanRecord = {
   id: number
   title: string
