@@ -44,6 +44,8 @@ export default async function Home({
   if (status === 'active') {
     query = query.is('return_date', null).eq('is_historical', false)
   } else if (status === 'returned') {
+    query = query.not('return_date', 'is', null)
+  }
 
   const { data: records, count, error } = await query
 
