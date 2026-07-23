@@ -3,6 +3,7 @@ export type ParsedLoan = {
   author: string
   publisher: string
   loan_date: string
+  library: string
 }
 
 // 横浜市立図書館の「貸出中の本」一覧ページのコピー&ペーストを解析する
@@ -44,6 +45,7 @@ export function parseYokohamaLending(text: string): ParsedLoan[] {
       author,
       publisher,
       loan_date: `${dateMatch[1]}-${month}-${day}`,
+      library: '横浜市立図書館',
     })
   }
 
