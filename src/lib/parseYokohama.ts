@@ -1,47 +1,146 @@
-export type ParsedLoan = {
-  title: string
-  author: string
-  publisher: string
-  loan_date: string
-}
+'use client'
 
-// 横浜市立図書館の「貸出中の本」一覧ページのコピー&ペーストを解析する
-// 「予約中の本」セクションは 貸出日: が無いため自動的に除外される
-// スラッシュ・コロンの全角/半角、改行有無などレイアウトの揺れに対応
-export function parseYokohamaLending(text: string): ParsedLoan[] {
-  const results: ParsedLoan[] = []
-  const blocks = text.split('【図書】').slice(1)
+import { useState } from 'react'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
+import { parseYokohamaLending, ParsedLoan } from '@/lib/parseYokohama'
 
-  for (const block of blocks) {
-    const titleMatch = block.match(/\[(.+?)\]\([^)]*\)/)
-    if (!titleMatch) continue
-    const title = titleMatch[1].trim()
+type Row = ParsedLoan & { checked: boolean }
 
-    // 貸出日(全角/半角コロン、全角/半角ピリオドに対応)
-    const dateMatch = block.match(
-      /貸出日[:：]\s*(\d{4})[.\uFF0E](\d{1,2})[.\uFF0E](\d{1,2})/
-    )
-    if (!dateMatch) continue // 予約中の本(貸出日なし)は除外
+export default function AddLoanPage() {
+  const [rawText, setRawText] = useState('')
+  const [rows, setRows] = useState<Row[]>([])
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
 
-    // 著者(全角/半角スラッシュに対応)
-    const authorMatch = block.match(/([^\n]+?)[／/]著/)
-    const author = authorMatch ? authorMatch[1].trim() : ''
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
 
-    // 出版社(取得できなくても登録自体は継続)
-    let publisher = ''
-    const pubMatch = block.match(/[／/]著\s*[-―ー－]+\s*(.+?)\s*[-―ー－]{2,}/)
-    if (pubMatch) publisher = pubMatch[1].trim()
+  function handleParse() {
+    const parsed = parseYokohamaLending(rawText)
+    setRows(parsed.map((r) => ({ ...r, checked: true })))
 
-    const month = dateMatch[2].padStart(2, '0')
-    const day = dateMatch[3].padStart(2, '0')
-
-    results.push({
-      title,
-      author,
-      publisher,
-      loan_date: `${dateMatch[1]}-${month}-${day}`,
-    })
+    if (parsed.length === 0) {
+      const blockCount = rawText.split('【図書】').length - 1
+      const firstBlock = rawText.split('【図書】')[1] ?? '(見つからず)'
+      setMessage(
+        '判読できる貸出データが見つかりませんでした。横浜市立図書館の「貸出中の本」一覧をそのまま貼り付けてください。'
+      )
+      setDebugInfo(
+        `[診断情報] 「【図書】」の出現数: ${blockCount}件\n最初のブロック(先頭200文字):\n${firstBlock.slice(0, 200)}`
+      )
+    } else {
+      setMessage(null)
+      setDebugInfo(null)
+    }
   }
 
-  return results
+  function toggleRow(index: number) {
+    setRows((prev) =>
+      prev.map((r, i) => (i === index ? { ...r, checked: !r.checked } : r))
+    )
+  }
+
+  async function handleRegister() {
+    const toInsert = rows
+      .filter((r) => r.checked)
+      .map((r) => ({
+        title: r.title,
+        author: r.author,
+        publisher: r.publisher,
+        loan_date: r.loan_date,
+        library: '横浜市立図書館',
+      }))
+
+    if (toInsert.length === 0) {
+      setMessage('登録する行が選択されていません。')
+      return
+    }
+
+    setSaving(true)
+    setMessage(null)
+
+    const { error } = await supabase.from('loan_records').insert(toInsert)
+
+    setSaving(false)
+
+    if (error) {
+      setMessage(`登録エラー: ${error.message}`)
+    } else {
+      setMessage(`${toInsert.length}件を登録しました。`)
+      setRows([])
+      setRawText('')
+    }
+  }
+
+  return (
+    <main className="min-h-screen p-8 max-w-2xl mx-auto">
+      <Link href="/" className="text-sm text-blue-600 underline">
+        ← 一覧に戻る
+      </Link>
+
+      <h1 className="text-2xl font-bold mt-2 mb-2">新規貸出を追加</h1>
+      <p className="text-gray-600 mb-6 text-sm">
+        横浜市立図書館OPACの「貸出中の本」一覧ページを開き、その内容をコピーして下に貼り付けてください。
+      </p>
+
+      <textarea
+        value={rawText}
+        onChange={(e) => setRawText(e.target.value)}
+        placeholder="ここにOPACの貸出中一覧を貼り付け"
+        className="w-full h-48 border rounded p-2 text-sm font-mono mb-3"
+      />
+
+      <button
+        onClick={handleParse}
+        className="bg-gray-800 text-white rounded px-4 py-1.5 mb-6"
+      >
+        判読する
+      </button>
+
+      {message && <p className="text-sm mb-4 text-gray-700">{message}</p>}
+
+      {debugInfo && (
+        <pre className="text-xs bg-gray-100 border rounded p-3 mb-4 whitespace-pre-wrap break-all">
+          {debugInfo}
+        </pre>
+      )}
+
+      {rows.length > 0 && (
+        <>
+          <h2 className="font-semibold mb-2">
+            判読結果({rows.length}件) — 登録する行にチェック
+          </h2>
+          <ul className="space-y-2 mb-6">
+            {rows.map((r, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-2 border-b pb-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={r.checked}
+                  onChange={() => toggleRow(i)}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="font-medium">{r.title}</div>
+                  <div className="text-gray-500">
+                    {r.author} ・ {r.publisher} ・ 貸出日: {r.loan_date}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <button
+            onClick={handleRegister}
+            disabled={saving}
+            className="bg-blue-700 text-white rounded px-4 py-1.5 disabled:opacity-50"
+          >
+            {saving ? '登録中...' : 'Supabaseに登録する'}
+          </button>
+        </>
+      )}
+    </main>
+  )
 }
