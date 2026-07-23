@@ -6,16 +6,20 @@ export type ParsedLoan = {
 }
 
 // 横浜市立図書館の「貸出中の本」一覧ページのコピー&ペーストを解析する
+// ブラウザから直接コピーした場合、書名はリンク形式ではなくプレーンテキストの
+// 1行として渡ってくるため、「【図書】」直後の最初の非空行を書名として扱う
 // 「予約中の本」セクションは 貸出日: が無いため自動的に除外される
-// スラッシュ・コロンの全角/半角、改行有無などレイアウトの揺れに対応
 export function parseYokohamaLending(text: string): ParsedLoan[] {
   const results: ParsedLoan[] = []
   const blocks = text.split('【図書】').slice(1)
 
   for (const block of blocks) {
-    const titleMatch = block.match(/\[(.+?)\]\([^)]*\)/)
-    if (!titleMatch) continue
-    const title = titleMatch[1].trim()
+    const lines = block
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+    if (lines.length === 0) continue
+    const title = lines[0]
 
     // 貸出日(全角/半角コロン、全角/半角ピリオドに対応)
     const dateMatch = block.match(
