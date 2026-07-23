@@ -13,14 +13,25 @@ export default function AddLoanPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
+
   function handleParse() {
     const parsed = parseYokohamaLending(rawText)
     setRows(parsed.map((r) => ({ ...r, checked: true })))
-    setMessage(
-      parsed.length === 0
-        ? '判読できる貸出データが見つかりませんでした。横浜市立図書館の「貸出中の本」一覧をそのまま貼り付けてください。'
-        : null
-    )
+
+    if (parsed.length === 0) {
+      const blockCount = rawText.split('【図書】').length - 1
+      const firstBlock = rawText.split('【図書】')[1] ?? '(見つからず)'
+      setMessage(
+        '判読できる貸出データが見つかりませんでした。横浜市立図書館の「貸出中の本」一覧をそのまま貼り付けてください。'
+      )
+      setDebugInfo(
+        `[診断情報] 「【図書】」の出現数: ${blockCount}件\n最初のブロック(先頭200文字):\n${firstBlock.slice(0, 200)}`
+      )
+    } else {
+      setMessage(null)
+      setDebugInfo(null)
+    }
   }
 
   function toggleRow(index: number) {
@@ -87,6 +98,12 @@ export default function AddLoanPage() {
       </button>
 
       {message && <p className="text-sm mb-4 text-gray-700">{message}</p>}
+
+      {debugInfo && (
+        <pre className="text-xs bg-gray-100 border rounded p-3 mb-4 whitespace-pre-wrap break-all">
+          {debugInfo}
+        </pre>
+      )}
 
       {rows.length > 0 && (
         <>
