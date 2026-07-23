@@ -104,3 +104,26 @@ export default function AddLoanPage() {
                   checked={r.checked}
                   onChange={() => toggleRow(i)}
                   className="mt-1"
+                />
+                <div>
+                  <div className="font-medium">{r.title}</div>
+                  <div className="text-gray-500">
+                    {r.author} ・ {r.publisher} ・ 貸出日: {r.loan_date}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <button
+            onClick={handleRegister}
+            disabled={saving}
+            className="bg-blue-700 text-white rounded px-4 py-1.5 disabled:opacity-50"
+          >
+            {saving ? '登録中...' : 'Supabaseに登録する'}
+          </button>
+        </>
+      )}
+    </main>
+  )
+}
