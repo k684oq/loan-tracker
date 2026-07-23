@@ -4,6 +4,11 @@ export type ParsedLoan = {
   publisher: string
   loan_date: string
   library: string
+  // 予約中の本のみで使用する。通常の貸出中レコードでは省略し、DB側のデフォルト値に委ねる
+  status?: string
+  rank?: string
+  pickup_library?: string
+  pickup_deadline?: string | null
 }
 
 // 横浜市立図書館の「貸出中の本」一覧ページのコピー&ペーストを解析する

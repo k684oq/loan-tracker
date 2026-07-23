@@ -10,6 +10,10 @@ type LoanRecord = {
   library: string
   loan_date: string | null
   return_date: string | null
+  status: string | null
+  rank: string | null
+  pickup_library: string | null
+  pickup_deadline: string | null
 }
 
 type SearchParams = { library?: string; status?: string }
@@ -33,9 +37,10 @@ export default async function Home({
   // メインクエリにフィルタ条件を組み立てる
   let query = supabase
     .from('loan_records')
-    .select('id, title, author, library, loan_date, return_date', {
-      count: 'exact',
-    })
+    .select(
+      'id, title, author, library, loan_date, return_date, status, rank, pickup_library, pickup_deadline',
+      { count: 'exact' }
+    )
     .order('loan_date', { ascending: false })
     .limit(50)
 
@@ -43,9 +48,14 @@ export default async function Home({
     query = query.eq('library', library)
   }
   if (status === 'active') {
-    query = query.is('return_date', null).eq('is_historical', false)
+    query = query
+      .is('return_date', null)
+      .eq('is_historical', false)
+      .neq('status', '予約中')
   } else if (status === 'returned') {
     query = query.not('return_date', 'is', null)
+  } else if (status === 'reserved') {
+    query = query.eq('status', '予約中')
   }
 
   const { data: records, count, error } = await query
@@ -90,6 +100,7 @@ export default async function Home({
             <option value="">すべて</option>
             <option value="active">貸出中(未返却)</option>
             <option value="returned">返却済み</option>
+            <option value="reserved">予約中</option>
           </select>
         </div>
 
@@ -109,10 +120,20 @@ export default async function Home({
         {records?.map((r: LoanRecord) => (
           <li key={r.id} className="border-b pb-2">
             <div className="font-medium">{r.title}</div>
-            <div className="text-sm text-gray-500">
-              {r.author} ・ {r.library} ・ 貸出日: {r.loan_date}
-              {r.return_date ? ` ・ 返却日: ${r.return_date}` : ' ・ 未返却'}
-            </div>
+            {r.status === '予約中' ? (
+              <div className="text-sm text-gray-500">
+                {r.library} ・ 予約日: {r.loan_date} ・ 状況/順位: {r.rank} ・
+                受取館: {r.pickup_library}
+                {r.pickup_deadline
+                  ? ` ・ 取置期限: ${r.pickup_deadline}`
+                  : ''}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">
+                {r.author} ・ {r.library} ・ 貸出日: {r.loan_date}
+                {r.return_date ? ` ・ 返却日: ${r.return_date}` : ' ・ 未返却'}
+              </div>
+            )}
           </li>
         ))}
       </ul>

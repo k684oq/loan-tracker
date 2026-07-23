@@ -5,12 +5,16 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { parseYokohamaLending, ParsedLoan } from '@/lib/parseYokohama'
 import { parseYokosukaLending } from '@/lib/parseYokosuka'
+import { parseKenritsuLending } from '@/lib/parseKenritsu'
+import { parseYokosukaReservation } from '@/lib/parseYokosukaReservation'
 
 type Row = ParsedLoan & { checked: boolean }
-type LibraryOption = 'yokohama' | 'yokosuka'
+type LibraryOption = 'yokohama' | 'yokosuka' | 'kenritsu'
+type KindOption = 'loan' | 'reservation'
 
 export default function AddLoanPage() {
   const [libraryOption, setLibraryOption] = useState<LibraryOption>('yokohama')
+  const [kindOption, setKindOption] = useState<KindOption>('loan')
   const [rawText, setRawText] = useState('')
   const [rows, setRows] = useState<Row[]>([])
   const [saving, setSaving] = useState(false)
@@ -19,9 +23,13 @@ export default function AddLoanPage() {
 
   function handleParse() {
     const parsed =
-      libraryOption === 'yokohama'
-        ? parseYokohamaLending(rawText)
-        : parseYokosukaLending(rawText)
+      kindOption === 'reservation' && libraryOption === 'yokosuka'
+        ? parseYokosukaReservation(rawText)
+        : libraryOption === 'yokohama'
+          ? parseYokohamaLending(rawText)
+          : libraryOption === 'yokosuka'
+            ? parseYokosukaLending(rawText)
+            : parseKenritsuLending(rawText)
 
     setRows(parsed.map((r) => ({ ...r, checked: true })))
 
@@ -55,6 +63,10 @@ export default function AddLoanPage() {
         publisher: r.publisher,
         loan_date: r.loan_date,
         library: r.library,
+        status: r.status,
+        rank: r.rank,
+        pickup_library: r.pickup_library,
+        pickup_deadline: r.pickup_deadline,
       }))
 
     if (toInsert.length === 0) {
@@ -93,13 +105,32 @@ export default function AddLoanPage() {
         <label className="block text-sm text-gray-600 mb-1">図書館</label>
         <select
           value={libraryOption}
-          onChange={(e) => setLibraryOption(e.target.value as LibraryOption)}
+          onChange={(e) => {
+            const value = e.target.value as LibraryOption
+            setLibraryOption(value)
+            if (value !== 'yokosuka') setKindOption('loan')
+          }}
           className="border rounded px-2 py-1"
         >
           <option value="yokohama">横浜市立図書館</option>
           <option value="yokosuka">横須賀図書館</option>
+          <option value="kenritsu">神奈川県立図書館</option>
         </select>
       </div>
+
+      {libraryOption === 'yokosuka' && (
+        <div className="mb-4">
+          <label className="block text-sm text-gray-600 mb-1">種別</label>
+          <select
+            value={kindOption}
+            onChange={(e) => setKindOption(e.target.value as KindOption)}
+            className="border rounded px-2 py-1"
+          >
+            <option value="loan">貸出中の本</option>
+            <option value="reservation">予約中の本</option>
+          </select>
+        </div>
+      )}
 
       <textarea
         value={rawText}
@@ -142,10 +173,20 @@ export default function AddLoanPage() {
                 />
                 <div>
                   <div className="font-medium">{r.title}</div>
-                  <div className="text-gray-500">
-                    {r.author} ・ {r.publisher} ・ {r.library} ・ 貸出日:{' '}
-                    {r.loan_date}
-                  </div>
+                  {r.status === '予約中' ? (
+                    <div className="text-gray-500">
+                      {r.library} ・ 予約日: {r.loan_date} ・ 状況/順位:{' '}
+                      {r.rank} ・ 受取館: {r.pickup_library}
+                      {r.pickup_deadline
+                        ? ` ・ 取置期限: ${r.pickup_deadline}`
+                        : ''}
+                    </div>
+                  ) : (
+                    <div className="text-gray-500">
+                      {r.author} ・ {r.publisher} ・ {r.library} ・ 貸出日:{' '}
+                      {r.loan_date}
+                    </div>
+                  )}
                 </div>
               </li>
             ))}
