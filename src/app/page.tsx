@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,6 +53,12 @@ export default async function Home({
   return (
     <main className="min-h-screen p-8 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-2">貸出台帳</h1>
+      <Link
+        href="/add"
+        className="inline-block text-sm text-blue-600 underline mb-4"
+      >
+        + 新規貸出を追加
+      </Link>
       <p className="text-gray-600 mb-6">
         該当件数: {count ?? '?'}件(最大50件を表示)
       </p>
