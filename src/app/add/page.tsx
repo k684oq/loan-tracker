@@ -4,26 +4,32 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { parseYokohamaLending, ParsedLoan } from '@/lib/parseYokohama'
+import { parseYokosukaLending } from '@/lib/parseYokosuka'
 
 type Row = ParsedLoan & { checked: boolean }
+type LibraryOption = 'yokohama' | 'yokosuka'
 
 export default function AddLoanPage() {
+  const [libraryOption, setLibraryOption] = useState<LibraryOption>('yokohama')
   const [rawText, setRawText] = useState('')
   const [rows, setRows] = useState<Row[]>([])
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-
   const [debugInfo, setDebugInfo] = useState<string | null>(null)
 
   function handleParse() {
-    const parsed = parseYokohamaLending(rawText)
+    const parsed =
+      libraryOption === 'yokohama'
+        ? parseYokohamaLending(rawText)
+        : parseYokosukaLending(rawText)
+
     setRows(parsed.map((r) => ({ ...r, checked: true })))
 
     if (parsed.length === 0) {
       const blockCount = rawText.split('【図書】').length - 1
       const firstBlock = rawText.split('【図書】')[1] ?? '(見つからず)'
       setMessage(
-        '判読できる貸出データが見つかりませんでした。横浜市立図書館の「貸出中の本」一覧をそのまま貼り付けてください。'
+        '判読できる貸出データが見つかりませんでした。選択した図書館のOPAC「貸出中の本」一覧をそのまま貼り付けてください。'
       )
       setDebugInfo(
         `[診断情報] 「【図書】」の出現数: ${blockCount}件\n最初のブロック(先頭200文字):\n${firstBlock.slice(0, 200)}`
@@ -48,7 +54,7 @@ export default function AddLoanPage() {
         author: r.author,
         publisher: r.publisher,
         loan_date: r.loan_date,
-        library: '横浜市立図書館',
+        library: r.library,
       }))
 
     if (toInsert.length === 0) {
@@ -79,9 +85,21 @@ export default function AddLoanPage() {
       </Link>
 
       <h1 className="text-2xl font-bold mt-2 mb-2">新規貸出を追加</h1>
-      <p className="text-gray-600 mb-6 text-sm">
-        横浜市立図書館OPACの「貸出中の本」一覧ページを開き、その内容をコピーして下に貼り付けてください。
+      <p className="text-gray-600 mb-4 text-sm">
+        OPACの「貸出中の本」一覧ページを開き、その内容をコピーして下に貼り付けてください。
       </p>
+
+      <div className="mb-4">
+        <label className="block text-sm text-gray-600 mb-1">図書館</label>
+        <select
+          value={libraryOption}
+          onChange={(e) => setLibraryOption(e.target.value as LibraryOption)}
+          className="border rounded px-2 py-1"
+        >
+          <option value="yokohama">横浜市立図書館</option>
+          <option value="yokosuka">横須賀図書館</option>
+        </select>
+      </div>
 
       <textarea
         value={rawText}
@@ -125,7 +143,8 @@ export default function AddLoanPage() {
                 <div>
                   <div className="font-medium">{r.title}</div>
                   <div className="text-gray-500">
-                    {r.author} ・ {r.publisher} ・ 貸出日: {r.loan_date}
+                    {r.author} ・ {r.publisher} ・ {r.library} ・ 貸出日:{' '}
+                    {r.loan_date}
                   </div>
                 </div>
               </li>
