@@ -9,6 +9,8 @@ export type ParsedLoan = {
   rank?: string
   pickup_library?: string
   pickup_deadline?: string | null
+  // 返却期限日。取得できない図書館では省略する
+  due_date?: string | null
 }
 
 // 横浜市立図書館の「貸出中の本」一覧ページのコピー&ペーストを解析する
@@ -45,12 +47,21 @@ export function parseYokohamaLending(text: string): ParsedLoan[] {
     const month = dateMatch[2].padStart(2, '0')
     const day = dateMatch[3].padStart(2, '0')
 
+    // 返却期限日(貸出日と同じ行に「返却期限日:2026.07.23」の形式で入っている)
+    const dueDateMatch = block.match(
+      /返却期限日[:：]\s*(\d{4})[.．](\d{1,2})[.．](\d{1,2})/
+    )
+    const due_date = dueDateMatch
+      ? `${dueDateMatch[1]}-${dueDateMatch[2].padStart(2, '0')}-${dueDateMatch[3].padStart(2, '0')}`
+      : null
+
     results.push({
       title,
       author,
       publisher,
       loan_date: `${dateMatch[1]}-${month}-${day}`,
       library: '横浜市立図書館',
+      due_date,
     })
   }
 

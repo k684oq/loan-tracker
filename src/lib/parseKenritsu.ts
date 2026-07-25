@@ -32,12 +32,20 @@ export function parseKenritsuLending(text: string): ParsedLoan[] {
     const month = dateMatch[2].padStart(2, '0')
     const day = dateMatch[3].padStart(2, '0')
 
+    const dueDateMatch = block.match(
+      /返却予定日[:：]\s*(\d{4})\/(\d{1,2})\/(\d{1,2})/
+    )
+    const due_date = dueDateMatch
+      ? `${dueDateMatch[1]}-${dueDateMatch[2].padStart(2, '0')}-${dueDateMatch[3].padStart(2, '0')}`
+      : null
+
     results.push({
       title,
       author,
       publisher,
       loan_date: `${dateMatch[1]}-${month}-${day}`,
       library: '神奈川県立図書館',
+      due_date,
     })
   }
 

@@ -1,29 +1,20 @@
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import RecordList from './RecordList'
+import LogoutButton from './LogoutButton'
 
 export const dynamic = 'force-dynamic'
 
-type LoanRecord = {
-  id: number
-  title: string
-  author: string | null
-  library: string
-  loan_date: string | null
-  return_date: string | null
-  status: string | null
-  rank: string | null
-  pickup_library: string | null
-  pickup_deadline: string | null
-}
-
-type SearchParams = { library?: string; status?: string }
+type SearchParams = { library?: string; status?: string; q?: string }
 
 export default async function Home({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>
 }) {
-  const { library, status } = await searchParams
+  const { library, status: statusParam, q } = await searchParams
+  // 初回アクセス(状態が未指定)時は「貸出中(未返却)」をデフォルト表示にする
+  const status = statusParam ?? 'active'
 
   // フィルタ用の図書館一覧を取得(重複除去)
   const { data: libraryRows } = await supabase
@@ -38,22 +29,31 @@ export default async function Home({
   let query = supabase
     .from('loan_records')
     .select(
-      'id, title, author, library, loan_date, return_date, status, rank, pickup_library, pickup_deadline',
+      'id, title, author, library, loan_date, return_date, status, rank, pickup_library, pickup_deadline, due_date',
       { count: 'exact' }
     )
-    .order('loan_date', { ascending: false })
     .limit(50)
+
+  if (status === 'reserved') {
+    // 予約中は「取置期限あり(受取可能)」を先頭、期限が近い順に並べる
+    query = query
+      .order('pickup_deadline', { ascending: true, nullsFirst: false })
+      .order('loan_date', { ascending: true })
+  } else {
+    // それ以外は返却期限が近い順(未設定は末尾)、次点で貸出日が新しい順に並べる
+    query = query
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .order('loan_date', { ascending: false })
+  }
 
   if (library) {
     query = query.eq('library', library)
   }
+  if (q) {
+    query = query.ilike('title', `%${q}%`)
+  }
   if (status === 'active') {
-    query = query
-      .is('return_date', null)
-      .eq('is_historical', false)
-      .neq('status', '予約中')
-  } else if (status === 'returned') {
-    query = query.not('return_date', 'is', null)
+    query = query.is('return_date', null).neq('status', '予約中')
   } else if (status === 'reserved') {
     query = query.eq('status', '予約中')
   }
@@ -62,18 +62,32 @@ export default async function Home({
 
   return (
     <main className="min-h-screen p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">貸出台帳</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl font-bold">貸出台帳</h1>
+        <LogoutButton />
+      </div>
       <Link
         href="/add"
         className="inline-block text-sm text-blue-600 underline mb-4"
       >
-        + 新規貸出を追加
+        + 新規登録
       </Link>
       <p className="text-gray-600 mb-6">
         該当件数: {count ?? '?'}件(最大50件を表示)
       </p>
 
       <form method="get" className="flex flex-wrap gap-3 mb-6 items-end">
+        <div>
+          <label className="block text-sm text-gray-600 mb-1">書名検索</label>
+          <input
+            type="text"
+            name="q"
+            defaultValue={q ?? ''}
+            placeholder="書名の一部を入力"
+            className="border rounded px-2 py-1"
+          />
+        </div>
+
         <div>
           <label className="block text-sm text-gray-600 mb-1">図書館</label>
           <select
@@ -94,12 +108,11 @@ export default async function Home({
           <label className="block text-sm text-gray-600 mb-1">状態</label>
           <select
             name="status"
-            defaultValue={status ?? ''}
+            defaultValue={status}
             className="border rounded px-2 py-1"
           >
             <option value="">すべて</option>
             <option value="active">貸出中(未返却)</option>
-            <option value="returned">返却済み</option>
             <option value="reserved">予約中</option>
           </select>
         </div>
@@ -116,27 +129,7 @@ export default async function Home({
         <p className="text-red-600 mb-4">エラー: {error.message}</p>
       )}
 
-      <ul className="space-y-3">
-        {records?.map((r: LoanRecord) => (
-          <li key={r.id} className="border-b pb-2">
-            <div className="font-medium">{r.title}</div>
-            {r.status === '予約中' ? (
-              <div className="text-sm text-gray-500">
-                {r.library} ・ 予約日: {r.loan_date} ・ 状況/順位: {r.rank} ・
-                受取館: {r.pickup_library}
-                {r.pickup_deadline
-                  ? ` ・ 取置期限: ${r.pickup_deadline}`
-                  : ''}
-              </div>
-            ) : (
-              <div className="text-sm text-gray-500">
-                {r.author} ・ {r.library} ・ 貸出日: {r.loan_date}
-                {r.return_date ? ` ・ 返却日: ${r.return_date}` : ' ・ 未返却'}
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
+      <RecordList records={records ?? []} />
     </main>
   )
 }

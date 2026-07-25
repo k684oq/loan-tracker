@@ -21,12 +21,19 @@ export function parseYokosukaLending(text: string): ParsedLoan[] {
     const month = dateMatch[2].padStart(2, '0')
     const day = dateMatch[3].padStart(2, '0')
 
+    const dueDateRaw = (cols[7] ?? '').trim()
+    const dueDateMatch = dueDateRaw.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/)
+    const due_date = dueDateMatch
+      ? `${dueDateMatch[1]}-${dueDateMatch[2].padStart(2, '0')}-${dueDateMatch[3].padStart(2, '0')}`
+      : null
+
     results.push({
       title,
       author: '',
       publisher: '',
       loan_date: `${dateMatch[1]}-${month}-${day}`,
       library: '横須賀図書館',
+      due_date,
     })
   }
 
