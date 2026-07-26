@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
 import { parseYokohamaLending, ParsedLoan } from '@/lib/parseYokohama'
 import { parseYokosukaLending } from '@/lib/parseYokosuka'
 import { parseKenritsuLending } from '@/lib/parseKenritsu'
@@ -70,96 +69,48 @@ export default function AddLoanPage() {
     setSaving(true)
     setMessage(null)
 
-    // 重複防止: 同じ図書館で「書名+貸出日」が既に登録済みの行はスキップする。
-    // 既存レコードに返却期限日が無く、貼り付けたデータにはある場合は
-    // 新規登録の代わりに返却期限日だけを補完する
-    const libraries = Array.from(new Set(checkedRows.map((r) => r.library)))
-    const loanDates = Array.from(new Set(checkedRows.map((r) => r.loan_date)))
-    const { data: existing, error: fetchError } = await supabase
-      .from('loan_records')
-      .select('id, title, loan_date, library, due_date')
-      .in('library', libraries)
-      .in('loan_date', loanDates)
-
-    if (fetchError) {
-      setSaving(false)
-      setMessage(`重複チェックエラー: ${fetchError.message}`)
-      return
-    }
-
-    const existingByKey = new Map(
-      (existing ?? []).map((e) => [`${e.library} ${e.title} ${e.loan_date}`, e])
-    )
-
-    const newRows: Row[] = []
-    const dueDateBackfills: { id: number; due_date: string }[] = []
-
-    for (const r of checkedRows) {
-      const match = existingByKey.get(`${r.library} ${r.title} ${r.loan_date}`)
-      if (match) {
-        if (!match.due_date && r.due_date) {
-          dueDateBackfills.push({ id: match.id, due_date: r.due_date })
-        }
-        continue
-      }
-      newRows.push(r)
-    }
-    const skipped = checkedRows.length - newRows.length
-
-    if (dueDateBackfills.length > 0) {
-      await Promise.all(
-        dueDateBackfills.map(({ id, due_date }) =>
-          supabase.from('loan_records').update({ due_date }).eq('id', id)
-        )
-      )
-    }
-
-    if (newRows.length === 0) {
-      setSaving(false)
-      setMessage(
-        dueDateBackfills.length > 0
-          ? `新規登録はありませんでした(${dueDateBackfills.length}件の返却期限日を補完しました)。`
-          : `登録対象はすべて登録済みでした(${skipped}件重複のためスキップ)。`
-      )
-      return
-    }
-
-    const toInsert = newRows.map((r) => ({
-      title: r.title,
-      author: r.author,
-      publisher: r.publisher,
-      loan_date: r.loan_date,
-      library: r.library,
-      status: r.status,
-      rank: r.rank,
-      pickup_library: r.pickup_library,
-      pickup_deadline: r.pickup_deadline,
-      due_date: r.due_date,
-    }))
-
-    // defaultToNull: false にしないと、値を渡さない列(status等)がNULLとして
-    // 送信されてしまい、NOT NULL制約付きのデフォルト値(status='貸出中'等)が使われない
-    const { error } = await supabase
-      .from('loan_records')
-      .insert(toInsert, { defaultToNull: false })
+    // 重複チェック・返却期限日/延長可否の補完・登録は全てサーバー側(/api/records)で行う
+    const res = await fetch('/api/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rows: checkedRows.map(({ checked: _checked, ...r }) => r),
+      }),
+    })
 
     setSaving(false)
 
-    if (error) {
-      setMessage(`登録エラー: ${error.message}`)
-    } else {
-      const notes = [
-        skipped > 0 ? `${skipped}件は登録済みのためスキップ` : '',
-        dueDateBackfills.length > 0
-          ? `${dueDateBackfills.length}件の返却期限日を補完`
-          : '',
-      ].filter(Boolean)
-      setMessage(
-        `${toInsert.length}件を登録しました${notes.length > 0 ? `(${notes.join('、')})` : ''}。`
-      )
-      setRows([])
-      setRawText('')
+    const body = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      setMessage(`登録エラー: ${body?.error ?? '不明なエラー'}`)
+      return
     }
+
+    const { insertedCount, skippedCount, updatedCount } = body as {
+      insertedCount: number
+      skippedCount: number
+      updatedCount: number
+    }
+
+    if (insertedCount === 0) {
+      setMessage(
+        updatedCount > 0
+          ? `新規登録はありませんでした(${updatedCount}件の返却期限日/延長可否を更新しました)。`
+          : `登録対象はすべて登録済みでした(${skippedCount}件重複のためスキップ)。`
+      )
+      return
+    }
+
+    const notes = [
+      skippedCount > 0 ? `${skippedCount}件は登録済みのためスキップ` : '',
+      updatedCount > 0 ? `${updatedCount}件の返却期限日/延長可否を更新` : '',
+    ].filter(Boolean)
+    setMessage(
+      `${insertedCount}件を登録しました${notes.length > 0 ? `(${notes.join('、')})` : ''}。`
+    )
+    setRows([])
+    setRawText('')
   }
 
   return (
@@ -227,6 +178,9 @@ export default function AddLoanPage() {
                       {r.author} ・ {r.publisher} ・ {r.library} ・ 貸出日:{' '}
                       {r.loan_date}
                       {r.due_date ? ` ・ 返却期限: ${r.due_date}` : ''}
+                      {typeof r.renewed === 'boolean'
+                        ? ` ・ ${r.renewed ? '延長可能' : '延長不可'}`
+                        : ''}
                     </div>
                   )}
                 </div>

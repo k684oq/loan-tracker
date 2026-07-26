@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin'
 import Link from 'next/link'
 import RecordList from './RecordList'
 import LogoutButton from './LogoutButton'
@@ -29,7 +29,7 @@ export default async function Home({
   let query = supabase
     .from('loan_records')
     .select(
-      'id, title, author, library, loan_date, return_date, status, rank, pickup_library, pickup_deadline, due_date',
+      'id, title, author, library, loan_date, return_date, status, rank, pickup_library, pickup_deadline, due_date, renewed',
       { count: 'exact' }
     )
     .limit(50)

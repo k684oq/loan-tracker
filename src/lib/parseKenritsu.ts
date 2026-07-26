@@ -39,6 +39,9 @@ export function parseKenritsuLending(text: string): ParsedLoan[] {
       ? `${dueDateMatch[1]}-${dueDateMatch[2].padStart(2, '0')}-${dueDateMatch[3].padStart(2, '0')}`
       : null
 
+    // 「貸出延長」というリンク文字列の行がある本だけ延長できる
+    const renewed = lines.some((l) => l.includes('貸出延長'))
+
     results.push({
       title,
       author,
@@ -46,6 +49,7 @@ export function parseKenritsuLending(text: string): ParsedLoan[] {
       loan_date: `${dateMatch[1]}-${month}-${day}`,
       library: '神奈川県立図書館',
       due_date,
+      renewed,
     })
   }
 

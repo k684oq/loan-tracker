@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import MarkAsBorrowedButton from './MarkAsBorrowedButton'
 import MarkAsReturnedButton from './MarkAsReturnedButton'
 import DeleteButton from './DeleteButton'
@@ -19,6 +18,7 @@ export type LoanRecord = {
   pickup_library: string | null
   pickup_deadline: string | null
   due_date: string | null
+  renewed: boolean | null
 }
 
 // 返却期限/取置期限までの残り日数を計算する(期限日は00:00基準で比較する)
@@ -61,6 +61,19 @@ const LIBRARY_COLORS: Record<string, string> = {
   神奈川県立図書館: 'bg-purple-100 text-purple-800',
 }
 
+function RenewBadge({ renewed }: { renewed: boolean | null }) {
+  if (renewed === null) return null
+  return (
+    <span
+      className={`inline-block text-xs font-medium px-2 py-0.5 rounded ${
+        renewed ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'
+      }`}
+    >
+      {renewed ? '延長可能' : '延長不可'}
+    </span>
+  )
+}
+
 function LibraryBadge({ library }: { library: string }) {
   const colorClass = LIBRARY_COLORS[library] ?? 'bg-gray-100 text-gray-700'
   return (
@@ -93,15 +106,16 @@ export default function RecordList({ records }: { records: LoanRecord[] }) {
 
     setBusy(true)
     setError(null)
-    const today = new Date().toISOString().slice(0, 10)
-    const { error } = await supabase
-      .from('loan_records')
-      .update({ return_date: today })
-      .in('id', ids)
+    const res = await fetch('/api/records/bulk-return', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    })
     setBusy(false)
 
-    if (error) {
-      setError(error.message)
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      setError(body?.error ?? '更新に失敗しました')
     } else {
       setSelected(new Set())
       router.refresh()
@@ -121,11 +135,16 @@ export default function RecordList({ records }: { records: LoanRecord[] }) {
 
     setBusy(true)
     setError(null)
-    const { error } = await supabase.from('loan_records').delete().in('id', ids)
+    const res = await fetch('/api/records/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    })
     setBusy(false)
 
-    if (error) {
-      setError(error.message)
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      setError(body?.error ?? '削除に失敗しました')
     } else {
       setSelected(new Set())
       router.refresh()
@@ -202,6 +221,7 @@ export default function RecordList({ records }: { records: LoanRecord[] }) {
                           : ''}
                       </span>
                       {!r.return_date && <DueBadge dueDate={r.due_date} />}
+                      {!r.return_date && <RenewBadge renewed={r.renewed} />}
                     </div>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {!r.return_date && <MarkAsReturnedButton id={r.id} />}

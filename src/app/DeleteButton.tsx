@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 
 export default function DeleteButton({ id, title }: { id: number; title: string }) {
   const router = useRouter()
@@ -17,12 +16,13 @@ export default function DeleteButton({ id, title }: { id: number; title: string 
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.from('loan_records').delete().eq('id', id)
+    const res = await fetch(`/api/records/${id}`, { method: 'DELETE' })
 
     setLoading(false)
 
-    if (error) {
-      setError(error.message)
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      setError(body?.error ?? '削除に失敗しました')
     } else {
       router.refresh()
     }

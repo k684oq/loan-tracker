@@ -1,39 +1,47 @@
 import { ParsedLoan } from './parseYokohama'
 
 // 横須賀図書館の「貸出中」一覧(タブ区切りの表)を解析する
-// 各行は「No.\t貸出延長\tタイトル\t区分\tバーコード番号\t貸出館\t貸出日\t返却期限日」の
-// タブ区切りになっており、先頭列が数字の行だけを本のデータ行として扱う
+// 通常は「(No.\t)(貸出延長\t)タイトル\t区分\tバーコード番号\t貸出館\t貸出日\t返却期限日」の
+// タブ区切りだが、延長上限に達している本は「延長上限回数に達しました。」等の警告文が
+// 追加の列として先頭側に挿入され、以降の列が丸ごと右にずれる。
+// そのため列番号を固定せず、バーコード番号(数字のみ6桁以上)を手がかりに
+// 「バーコード番号の2つ前」をタイトル列として検出し、列ズレの影響を受けないようにする。
+// バーコード番号より前に余分な列があり、そこに「延長」の文字が含まれていれば
+// 延長上限到達などで延長できない本と判定する
 export function parseYokosukaLending(text: string): ParsedLoan[] {
   const results: ParsedLoan[] = []
   const lines = text.split('\n')
 
   for (const line of lines) {
-    const cols = line.split('\t')
-    const rowNo = (cols[0] ?? '').trim()
-    if (!/^\d+$/.test(rowNo)) continue // ヘッダー行・継続行は除外
-    if (cols.length < 8) continue
+    const cols = line.split('\t').map((c) => c.trim())
 
-    const title = (cols[2] ?? '').trim()
-    const loanDateRaw = (cols[6] ?? '').trim()
-    const dateMatch = loanDateRaw.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/)
-    if (!title || !dateMatch) continue
+    const barcodeIndex = cols.findIndex((c) => /^\d{6,}$/.test(c))
+    if (barcodeIndex < 2) continue // タイトル列が存在しない行は除外
 
-    const month = dateMatch[2].padStart(2, '0')
-    const day = dateMatch[3].padStart(2, '0')
+    const title = cols[barcodeIndex - 2]
+    if (!title) continue
 
-    const dueDateRaw = (cols[7] ?? '').trim()
-    const dueDateMatch = dueDateRaw.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/)
-    const due_date = dueDateMatch
-      ? `${dueDateMatch[1]}-${dueDateMatch[2].padStart(2, '0')}-${dueDateMatch[3].padStart(2, '0')}`
-      : null
+    const dateFields = cols
+      .slice(barcodeIndex + 1)
+      .filter((c) => /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(c))
+    if (dateFields.length < 2) continue // 貸出日・返却期限日が揃っていない行は除外
+
+    const toIso = (raw: string) => {
+      const m = raw.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/)!
+      return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
+    }
+
+    const leadingCols = cols.slice(0, barcodeIndex - 2)
+    const renewed = !leadingCols.some((c) => c.includes('延長'))
 
     results.push({
       title,
       author: '',
       publisher: '',
-      loan_date: `${dateMatch[1]}-${month}-${day}`,
+      loan_date: toIso(dateFields[0]),
       library: '横須賀図書館',
-      due_date,
+      due_date: toIso(dateFields[1]),
+      renewed,
     })
   }
 

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 
 export default function MarkAsReturnedButton({ id }: { id: number }) {
   const router = useRouter()
@@ -14,15 +13,17 @@ export default function MarkAsReturnedButton({ id }: { id: number }) {
     setError(null)
 
     const today = new Date().toISOString().slice(0, 10)
-    const { error } = await supabase
-      .from('loan_records')
-      .update({ return_date: today })
-      .eq('id', id)
+    const res = await fetch(`/api/records/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_date: today }),
+    })
 
     setLoading(false)
 
-    if (error) {
-      setError(error.message)
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      setError(body?.error ?? '更新に失敗しました')
     } else {
       router.refresh()
     }

@@ -11,6 +11,9 @@ export type ParsedLoan = {
   pickup_deadline?: string | null
   // 返却期限日。取得できない図書館では省略する
   due_date?: string | null
+  // 貸出延長が可能かどうか(コピー内に「貸出延長」のリンク文字列があるかで判定)。
+  // 予約中のレコードや判定できない図書館では省略する
+  renewed?: boolean
 }
 
 // 横浜市立図書館の「貸出中の本」一覧ページのコピー&ペーストを解析する
@@ -55,6 +58,9 @@ export function parseYokohamaLending(text: string): ParsedLoan[] {
       ? `${dueDateMatch[1]}-${dueDateMatch[2].padStart(2, '0')}-${dueDateMatch[3].padStart(2, '0')}`
       : null
 
+    // 「貸出延長」というリンク文字列の行がある本だけ延長できる
+    const renewed = lines.some((l) => l.includes('貸出延長'))
+
     results.push({
       title,
       author,
@@ -62,6 +68,7 @@ export function parseYokohamaLending(text: string): ParsedLoan[] {
       loan_date: `${dateMatch[1]}-${month}-${day}`,
       library: '横浜市立図書館',
       due_date,
+      renewed,
     })
   }
 
