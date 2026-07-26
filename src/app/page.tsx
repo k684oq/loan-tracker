@@ -53,12 +53,21 @@ export default async function Home({
     query = query.ilike('title', `%${q}%`)
   }
   if (status === 'active') {
-    query = query.is('return_date', null).neq('status', '予約中')
+    // 返却期限が不明なレコードはCSV取込時の履歴データで実際の貸出中ではないため除外する
+    query = query
+      .is('return_date', null)
+      .neq('status', '予約中')
+      .not('due_date', 'is', null)
   } else if (status === 'reserved') {
     query = query.eq('status', '予約中')
   }
 
   const { data: records, count, error } = await query
+
+  const exportParams = new URLSearchParams()
+  if (library) exportParams.set('library', library)
+  exportParams.set('status', status)
+  if (q) exportParams.set('q', q)
 
   return (
     <main className="min-h-screen p-8 max-w-2xl mx-auto">
@@ -66,12 +75,17 @@ export default async function Home({
         <h1 className="text-2xl font-bold">貸出台帳</h1>
         <LogoutButton />
       </div>
-      <Link
-        href="/add"
-        className="inline-block text-sm text-blue-600 underline mb-4"
-      >
-        + 新規登録
-      </Link>
+      <div className="flex gap-4 mb-4">
+        <Link href="/add" className="inline-block text-sm text-blue-600 underline">
+          + 新規登録
+        </Link>
+        <a
+          href={`/api/export?${exportParams.toString()}`}
+          className="inline-block text-sm text-blue-600 underline"
+        >
+          CSVダウンロード
+        </a>
+      </div>
       <p className="text-gray-600 mb-6">
         該当件数: {count ?? '?'}件(最大50件を表示)
       </p>
