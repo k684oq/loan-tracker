@@ -4,7 +4,7 @@ import { ParsedLoan } from '@/lib/parseYokohama'
 
 // /add ページの「Supabaseに登録する」から呼ばれる。
 // 重複防止: 同じ図書館で「書名+貸出日」が既に登録済みの行はスキップする。
-// 既存レコードに返却期限日が無く、貼り付けたデータにはある場合は返却期限日を補完し、
+// 返却期限日は、延長によって貼り付けたデータの値が既存レコードと変わっていれば更新し、
 // 延長可否(renewed)は貼り付けるたびに最新の状態へ更新する
 export async function POST(request: Request) {
   const { rows } = (await request.json()) as { rows: ParsedLoan[] }
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     const match = existingByKey.get(`${r.library} ${r.title} ${r.loan_date}`)
     if (match) {
       const updates: { due_date?: string; renewed?: boolean } = {}
-      if (!match.due_date && r.due_date) updates.due_date = r.due_date
+      if (r.due_date && match.due_date !== r.due_date) updates.due_date = r.due_date
       if (typeof r.renewed === 'boolean' && match.renewed !== r.renewed) {
         updates.renewed = r.renewed
       }
