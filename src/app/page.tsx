@@ -53,11 +53,13 @@ export default async function Home({
     query = query.ilike('title', `%${q}%`)
   }
   if (status === 'active') {
-    // 返却期限が不明なレコードはCSV取込時の履歴データで実際の貸出中ではないため除外する
+    // CSV取込時の履歴データ(返却期限不明かつis_historical=true)は除外する。
+    // 予約中から「借りた」に切り替えた直後は返却期限がまだ不明だが、
+    // is_historicalはfalseのままなのでこちらの条件で表示され続ける
     query = query
       .is('return_date', null)
       .neq('status', '予約中')
-      .not('due_date', 'is', null)
+      .or('due_date.not.is.null,is_historical.eq.false')
   } else if (status === 'reserved') {
     query = query.eq('status', '予約中')
   }

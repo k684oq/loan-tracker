@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     query = query
       .is('return_date', null)
       .neq('status', '予約中')
-      .not('due_date', 'is', null)
+      .or('due_date.not.is.null,is_historical.eq.false')
   } else if (status === 'reserved') {
     query = query.eq('status', '予約中')
   }
