@@ -16,9 +16,11 @@ export function parseYokohamaReservation(text: string): ParsedLoan[] {
       .filter((l) => l.length > 0)
     if (lines.length === 0) continue
 
-    // 予約日(全角/半角ピリオドに対応)
+    // 予約日(全角/半角ピリオドに対応。スマホのデスクトップ表示コピーでは
+    // 「予約日 2026.07.20 受取館 南図書館」のようにコロンなしで
+    // スペース区切りになるため、コロンは省略可能とする)
     const dateMatch = block.match(
-      /予約日[:：]\s*(\d{4})[.．](\d{1,2})[.．](\d{1,2})/
+      /予約日[:：]?\s*(\d{4})[.．](\d{1,2})[.．](\d{1,2})/
     )
     if (!dateMatch) continue // 貸出中の本(予約日なし)は除外
 
@@ -31,7 +33,7 @@ export function parseYokohamaReservation(text: string): ParsedLoan[] {
     const author = authorMatch ? authorMatch[1].trim() : authorRaw.trim()
     const publisher = (segments[1] ?? '').trim()
 
-    const pickupLibraryMatch = block.match(/受取館[:：]\s*(\S+)/)
+    const pickupLibraryMatch = block.match(/受取館[:：]?\s*(\S+)/)
     const pickupLibrary = pickupLibraryMatch
       ? pickupLibraryMatch[1].trim()
       : ''
